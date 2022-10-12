@@ -1,4 +1,5 @@
 
+from time import sleep
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
@@ -224,6 +225,7 @@ class STOCK:
     def buy_less_than_unit(self, symbol, amount:int):
         pass
     
+    #Need to add try catch to avoid an error when handlers are called on different pages 
     def __trade_page_handler(self, index):
         """ click header of trade page
 
@@ -275,6 +277,17 @@ class STOCK:
             print("index should be 0 to 13.")
             return False
     
+    def __handle_symbol_page_header(self, index:int):
+        if index <= 8 and index >= 0:
+            wait = WebDriverWait(self.driver, 5)
+            header_tr = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "tab02T")))
+            tds = header_tr.find_element(By.XPATH, "table").find_element(By.XPATH, "tbody").find_element(By.XPATH, "tr").find_elements(By.XPATH, "td")
+            tds[index].click()
+            return True
+        else:
+            print("index should be 0 to 8")
+            return False
+    
     def open_position_page(self):
         return self.__trade_page_handler(3)
     
@@ -315,6 +328,38 @@ class STOCK:
             return positions
         else:
             return []
+        
+    def get_rating(self, symbol:str) -> dict:
+        """
+        Args:
+            symbol (str): company name or index
+
+        Returns:
+            dict: key: number of star, value: number of traders who advocate the key
+        """
+        try:
+            if self.__open_symbol_page(symbol):
+                sleep(1)#when user opens symbol page before calling open_symbol_page, old page may be refered. So just wait 1 sec.
+                if self.__handle_symbol_page_header(3):
+                    tr_eles = self.driver.find_elements(By.CLASS_NAME, "vaT")
+                    if len(tr_eles) != 8:
+                        if len(tr_eles) == 3:
+                            print(f"rating is not provided for {symbol}")
+                            return {}
+                        print("number of element doesn't match with assumption. HP may be updated.")
+                        return {}
+                    rating = {}
+                    for index in range(3, 8):
+                        tds = tr_eles[index].find_elements(By.XPATH, "td")
+                        rating[8-index] = int(tds[2].text)
+                    return rating
+                else:
+                    return {}
+            else:
+                return {}
+            
+        except Exception as e:
+            print(e)
         
     def sell_order(self, symbol, amount, password, order_price=None):
         """
