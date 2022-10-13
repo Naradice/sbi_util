@@ -21,6 +21,10 @@ class STOCK:
         chrome_option.add_argument('--disable-gpu')
         self.driver = webdriver.Chrome(ChromeDriverManager().install(), chrome_options=chrome_option)
         self.driver.implicitly_wait(5)
+        
+        self.open()
+        self.login(id, password)
+        self.trading_pass = trading_pass
     
     def __check_login(self, retry_count=0):
         """
@@ -201,30 +205,6 @@ class STOCK:
             print("can't find unit text")
             return False
             
-    def buy_order(self, symbol:str, amount:int, password, order_price:float=None):
-        """ 
-
-        Args:
-            symbol (str): symbol to order. Allows if search result shows a page of symbol.
-            amount (int): amount of order. try to buy with (amount * unit) * order_price
-            order_price (float, optional): price to order. Defaults to None.
-
-        Returns:
-            bool: Return True if order is completed
-        """
-        self.__check_login()
-        if self.__open_symbol_page(symbol):
-            if self.__transit_symbol_page_to_order_page(sbi_enum.buy):
-                self.filling_order_page(amount, password=password, price=order_price)
-            else:
-                print("Failed to transit to order page")
-                return False
-        else:
-            print("failed to open symbol page")
-            
-    def buy_less_than_unit(self, symbol, amount:int):
-        pass
-    
     #Need to add try catch to avoid an error when handlers are called on different pages 
     def __trade_page_handler(self, index):
         """ click header of trade page
@@ -361,7 +341,31 @@ class STOCK:
         except Exception as e:
             print(e)
         
-    def sell_order(self, symbol, amount, password, order_price=None):
+    def buy_order(self, symbol:str, amount:int, order_price:float=None):
+        """ 
+
+        Args:
+            symbol (str): symbol to order. Allows if search result shows a page of symbol.
+            amount (int): amount of order. try to buy with (amount * unit) * order_price
+            order_price (float, optional): price to order. Defaults to None.
+
+        Returns:
+            bool: Return True if order is completed
+        """
+        self.__check_login()
+        if self.__open_symbol_page(symbol):
+            if self.__transit_symbol_page_to_order_page(sbi_enum.buy):
+                self.filling_order_page(amount, password=self.trading_pass, price=order_price)
+            else:
+                print("Failed to transit to order page")
+                return False
+        else:
+            print("failed to open symbol page")
+            
+    def buy_less_than_unit(self, symbol, amount:int):
+        raise Exception("Not implemented")
+    
+    def sell_order(self, symbol, amount, order_price=None):
         """
 
         Args:
@@ -383,14 +387,14 @@ class STOCK:
                     is_clicked = True
                     break
                 if is_clicked:
-                    return self.filling_order_page(amount, password, price=order_price)
+                    return self.filling_order_page(amount, self.trading_pass, price=order_price)
                 else:
                     print(f"{symbol} is not found on symbol column.")
         else:
             print("No position available")
             return False
     
-    def get_orders(self):
+    def get_orders(self) -> list:
         target_row_class_name = "md-l-tr-01"
         wait = WebDriverWait(self.driver, 5)
         wait.until(EC.presence_of_element_located((By.CLASS_NAME, target_row_class_name)))
@@ -434,7 +438,7 @@ class STOCK:
             print("cancel button is not found")
             return False
     
-    def cancel_order(self, symbol, password):
+    def cancel_order(self, symbol):
         if self.open_ordered_position_page():
             orders = self.get_orders()
             if len(orders) > 0:
@@ -445,7 +449,7 @@ class STOCK:
                         is_clicked = True
                         break
                 if is_clicked:
-                    return self.__click_cancel_on_cancel_page()
+                    return self.__click_cancel_on_cancel_page(self.trading_pass)
                 else:
                     print(f"{symbol} is not found on symbol column.")
             else:
