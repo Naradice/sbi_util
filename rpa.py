@@ -4,7 +4,7 @@ from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
-import sbi_enum
+from . import sbi_enum
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 
@@ -341,6 +341,37 @@ class STOCK:
         except Exception as e:
             print(e)
         
+    def get_ratings(self, symbols):
+        """
+        Args:
+            symbols (list): list of company name or index
+
+        Returns:
+            dict: key: sygnal, value: rating. If not provided, {}
+        """
+        ratings = {}
+        if len(symbols) > 0:
+            ratings[symbols[0]] = self.get_rating(symbols[0])
+            for symbol in symbols[1:]:
+                try:
+                    if self.__open_symbol_page(symbol):
+                        tr_eles = self.driver.find_elements(By.CLASS_NAME, "vaT")
+                        if len(tr_eles) != 8:
+                            if len(tr_eles) == 3:
+                                print(f"rating is not provided for {symbol}")
+                            print("number of element doesn't match with assumption. HP may be updated.")
+                        rating = {}
+                        for index in range(3, 8):
+                            tds = tr_eles[index].find_elements(By.XPATH, "td")
+                            rating[8-index] = int(tds[2].text)
+                        ratings[symbol] = rating
+                    else:
+                        print("failed to open {symbol} page.")
+                
+                except Exception as e:
+                    print(e)
+        return ratings
+        
     def buy_order(self, symbol:str, amount:int, order_price:float=None):
         """ 
 
@@ -365,8 +396,9 @@ class STOCK:
     def buy_less_than_unit(self, symbol, amount:int):
         raise Exception("Not implemented")
     
-    def sell_order(self, symbol, amount, order_price=None):
+    def sell_to_close_buy_order(self, symbol, amount, order_price=None):
         """
+        Sell to close
 
         Args:
             symbol (str): symbol name or id
