@@ -387,11 +387,13 @@ class STOCK:
         if self.__open_symbol_page(symbol):
             if self.__transit_symbol_page_to_order_page(sbi_enum.buy):
                 self.filling_order_page(amount, password=self.trading_pass, price=order_price)
+                return True
             else:
                 print("Failed to transit to order page")
                 return False
         else:
             print("failed to open symbol page")
+            return False
             
     def buy_less_than_unit(self, symbol, amount:int):
         raise Exception("Not implemented")
