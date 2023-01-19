@@ -1,4 +1,3 @@
-
 from time import sleep
 
 from selenium import webdriver
@@ -24,7 +23,6 @@ class STOCK:
         chrome_option.add_argument('--disable-gpu')
         self.driver = webdriver.Chrome(ChromeDriverManager().install(), chrome_options=chrome_option)
         self.driver.implicitly_wait(5)
-        
         self.open()
         self.login(id, password)
         self.trading_pass = trading_pass
@@ -105,7 +103,9 @@ class STOCK:
             field_ele = form_ele.find_element(By.ID, "top_stock_sec")
             field_ele.send_keys(symbol)
             field_ele.send_keys(Keys.ENTER)
+            sleep(1)#If other symbol page already opened, sometimes wait.until pass before search result comes
             header_ele = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "head01")))
+            del wait
             #header_ele = self.driver.find_element(By.CLASS_NAME, "head01")
             
             if "検索結果" in header_ele.text:
@@ -117,11 +117,13 @@ class STOCK:
                 print("failed to load the symvol page")
                 return False
         except Exception as e:
-            print(e)
+            print(f"error happened on open_symbol_page {e}")
+            return False
         
     def __transit_symbol_page_to_order_page(self, order_type) -> bool:
+        result = False
         try:
-            wait = WebDriverWait(self.driver, 10)
+            wait = WebDriverWait(self.driver, 20)
             header_ele = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "head01")))
             #header_ele = self.driver.find_element(By.CLASS_NAME, "head01")
             if header_ele.text == "国内株式":
@@ -132,15 +134,17 @@ class STOCK:
                     if text_ele:
                         print("debug: " + text_ele.text)
                         if text_ele.text == target_txt:
-                            text_ele.click()
-                            return True
-                print(f"no elemnt for {order_type}")
-                return False
+                           text_ele.click()
+                           result = True
+                           break
+                if result is False:
+                    print(f"no elemnt for {order_type}")
             else:
-                return False
-            
+                print("header is not found.")
+            return result
         except Exception as e:
-            print(e)
+            print(f"error happend on transit_symbol_page_to_order_page {e}")
+            return False
     
     def filling_order_page(self, amount, password, market=False, price=None):
         """ order the symbol
@@ -153,7 +157,8 @@ class STOCK:
             price (float, optional): Price to order. Defaults to None.
 
         Returns:
-            bool: _description_
+            bool: suc or not
+            str: error text. if succeed, None
         """
         target_class_name="mtext"
         wait = WebDriverWait(self.driver, 10)
@@ -194,20 +199,24 @@ class STOCK:
             
             #check if order is completed
             target_name = "md-l-table-01"
+            error_class = "fRed01"
+            invalid_ele = self.driver.find_elements(By.CLASS_NAME, error_class)
+            if invalid_ele:
+                error_txt = f"failed to order: {invalid_ele.text}"
+                print(error_txt)
+                return False, error_txt
             result_ele = self.driver.find_elements(By.CLASS_NAME, target_name)
             if result_ele:
                 print("order is completed.")
-                return True
-            invalid_txt_name = "fl01"
-            invalid_ele = self.driver.find_element(By.CLASS_NAME, invalid_txt_name)
-            if invalid_ele:
-                print(f"failed to order: {invalid_ele.text}")
-                return False
-            print(f"failed to order with unkown issue.")
-            return False
+                return True, None
+                
+            error_txt = f"failed to order with unkown issue."
+            print(error_txt)
+            return False, error_txt
         else:
-            print("can't find unit text")
-            return False
+            error_txt = "can't find unit text"
+            print(error_txt)
+            return False, error_txt
             
     #Need to add try catch to avoid an error when handlers are called on different pages 
     def __trade_page_handler(self, index):
@@ -267,6 +276,26 @@ class STOCK:
             header_tr = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "tab02T")))
             tds = header_tr.find_element(By.XPATH, "table").find_element(By.XPATH, "tbody").find_element(By.XPATH, "tr").find_elements(By.XPATH, "td")
             tds[index].click()
+            if index == 0:
+                ele = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "kabuNowStatus")))
+            elif index == 1:
+                ele = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "newsMain01")))
+            elif index == 2:
+                ele = wait.until(EC.presence_of_element_located((By.ID, "CONTENTSAREA01")))
+            elif index == 3:
+                ele = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "mgt20")))
+                # case when review is not provided
+                # wait.until(EC.presence_of_element_located((By.CLASS_NAME, "mtext-info-w")))
+            elif index == 4:
+                ele = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "shikihouBox01")))
+            elif index == 5:
+                ele = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "summary_left")))
+            elif index == 6:
+                ele = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "stock_chart_disc")))
+            elif index == 7:
+                ele = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "accTbl01")))
+            elif index == 8:
+                ele = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "Analysis")))
             return True
         else:
             print("index should be 0 to 8")
@@ -323,7 +352,6 @@ class STOCK:
         """
         try:
             if self.__open_symbol_page(symbol):
-                sleep(1)#when user opens symbol page before calling open_symbol_page, old page may be refered. So just wait 1 sec.
                 if self.__handle_symbol_page_header(3):
                     tr_eles = self.driver.find_elements(By.CLASS_NAME, "vaT")
                     if len(tr_eles) != 8:
@@ -343,7 +371,7 @@ class STOCK:
                 return {}
             
         except Exception as e:
-            print(e)
+            print(f"error happened on get_rating: {e}")
         
     def get_ratings(self, symbols):
         """
@@ -356,9 +384,11 @@ class STOCK:
         ratings = {}
         if len(symbols) > 0:
             for symbol in symbols:
+                print("start getting rateing")
                 rating = self.get_rating(symbol)
-                if type(rating) is dict and len(rating) > 0:
+                if type(rating) is dict:
                     ratings[symbol] = rating
+                    print("added rating")
         return ratings
         
     def buy_order(self, symbol:str, amount:int, order_price:float=None):

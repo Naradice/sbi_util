@@ -1,5 +1,3 @@
-from selenium.webdriver.common.by import By
-
 buy =  "buy"
 sell = "sell"
 margin_buy = "margin_buy"
