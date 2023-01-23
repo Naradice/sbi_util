@@ -132,7 +132,6 @@ class STOCK:
                 for candidate in candidate_eles:
                     text_ele = candidate.find_element(By.CLASS_NAME, "fm01")
                     if text_ele:
-                        print("debug: " + text_ele.text)
                         if text_ele.text == target_txt:
                            text_ele.click()
                            result = True
