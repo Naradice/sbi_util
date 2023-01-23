@@ -11,3 +11,5 @@ symbol_page_to_order_element = {
     margin_buy: "信用買",
     margin_sell: "信用売"
 }
+
+ERROR_BUDGET_IS_SHORT = "WECEK00210"

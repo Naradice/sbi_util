@@ -202,9 +202,11 @@ class STOCK:
             error_class = "fRed01"
             invalid_ele = self.driver.find_elements(By.CLASS_NAME, error_class)
             if invalid_ele:
-                error_txt = f"failed to order: {invalid_ele.text}"
-                print(error_txt)
-                return False, error_txt
+                error_txt = invalid_ele[0].text
+                if sbi_enum.ERROR_BUDGET_IS_SHORT in error_txt:
+                    return False, sbi_enum.ERROR_BUDGET_IS_SHORT
+                else:
+                    return False, error_txt
             result_ele = self.driver.find_elements(By.CLASS_NAME, target_name)
             if result_ele:
                 print("order is completed.")
