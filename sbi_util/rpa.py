@@ -11,77 +11,74 @@ from . import sbi_enum
 
 
 class STOCK:
-    
-    order_types = {
+    order_types = {}
 
-    }
-    
     def __init__(self, id=None, password=None, trading_pass=None) -> None:
         chrome_option = webdriver.ChromeOptions()
         chrome_option.add_experimental_option("detach", True)
-        #chrome_option.add_argument('--headless')
-        chrome_option.add_argument('--disable-gpu')
+        # chrome_option.add_argument('--headless')
+        chrome_option.add_argument("--disable-gpu")
         self.driver = webdriver.Chrome(ChromeDriverManager().install(), chrome_options=chrome_option)
         self.driver.implicitly_wait(5)
         self.open()
         self.login(id, password)
         self.trading_pass = trading_pass
-    
+
     def __check_login(self, retry_count=0):
         """
         return False if newly logged in
         """
         # this take 10 sec.
-        # if self.is_driver_available() == False:
+        # if self.is_driver_available() is False:
         #     self.open()
-        if self.is_logged_in() == False:
+        if self.is_logged_in() is False:
             if self.login(self.id, self.pa):
                 return True
             elif retry_count < 5:
-                #try opining selenium again
+                # try opining selenium again
                 self.driver.quit()
                 self.__init__()
                 self.open()
-                return self.__check_login(retry_count+1)
+                return self.__check_login(retry_count + 1)
             else:
                 print("Failed to check login state.")
                 return False
         return True
-        
+
     def is_driver_available(self):
         try:
             self.driver.current_url
             return True
-        except Exception as e:
+        except Exception:
             print("driver is unavailable.")
             return False
-    
+
     def open(self):
         self.driver.get("https://site1.sbisec.co.jp/ETGate/")
-    
+
     def is_login_page(self):
         target_name = "ACT_login"
         try:
             login_ele = self.driver.find_element(By.NAME, target_name)
             if login_ele:
                 return True
-        except Exception as e:
+        except Exception:
             return False
-    
+
     def is_logged_in(self) -> bool:
         try:
             self.driver.find_element(By.NAME, "user_password")
             return False
-        except Exception as e:
+        except Exception:
             return True
-    
-    def login(self, id:str, password:str) -> bool:
+
+    def login(self, id: str, password: str) -> bool:
         try:
             id_ele = self.driver.find_element(By.NAME, "user_id")
             id_ele.send_keys(id)
             pa_ele = self.driver.find_element(By.NAME, "user_password")
             pa_ele.send_keys(password)
-            log_ele = self.driver.find_element(By.NAME,"ACT_login")
+            log_ele = self.driver.find_element(By.NAME, "ACT_login")
             log_ele.click()
             if self.is_logged_in():
                 # store creds to utilize them when login life time end
@@ -94,20 +91,20 @@ class STOCK:
         except Exception as e:
             print(e)
             return False
-    
-    def __open_symbol_page(self, symbol:str) -> bool:
+
+    def __open_symbol_page(self, symbol: str) -> bool:
         try:
             wait = WebDriverWait(self.driver, 5)
             form_ele = wait.until(EC.presence_of_element_located((By.ID, "srchK")))
-            #form_ele = self.driver.find_element(By.ID, "srchK")
+            # form_ele = self.driver.find_element(By.ID, "srchK")
             field_ele = form_ele.find_element(By.ID, "top_stock_sec")
             field_ele.send_keys(symbol)
             field_ele.send_keys(Keys.ENTER)
-            sleep(1)#If other symbol page already opened, sometimes wait.until pass before search result comes
+            sleep(1)  # If other symbol page already opened, sometimes wait.until pass before search result comes
             header_ele = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "head01")))
             del wait
-            #header_ele = self.driver.find_element(By.CLASS_NAME, "head01")
-            
+            # header_ele = self.driver.find_element(By.CLASS_NAME, "head01")
+
             if "検索結果" in header_ele.text:
                 print(f"{symbol} returned candidates page on open_order_page")
                 return False
@@ -119,13 +116,13 @@ class STOCK:
         except Exception as e:
             print(f"error happened on open_symbol_page {e}")
             return False
-        
+
     def __transit_symbol_page_to_order_page(self, order_type) -> bool:
         result = False
         try:
             wait = WebDriverWait(self.driver, 20)
             header_ele = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "head01")))
-            #header_ele = self.driver.find_element(By.CLASS_NAME, "head01")
+            # header_ele = self.driver.find_element(By.CLASS_NAME, "head01")
             if header_ele.text == "国内株式":
                 candidate_eles = self.driver.find_elements(By.CLASS_NAME, order_type)
                 target_txt = sbi_enum.symbol_page_to_order_element[order_type]
@@ -133,9 +130,9 @@ class STOCK:
                     text_ele = candidate.find_element(By.CLASS_NAME, "fm01")
                     if text_ele:
                         if text_ele.text == target_txt:
-                           text_ele.click()
-                           result = True
-                           break
+                            text_ele.click()
+                            result = True
+                            break
                 if result is False:
                     print(f"no elemnt for {order_type}")
             else:
@@ -144,9 +141,9 @@ class STOCK:
         except Exception as e:
             print(f"error happend on transit_symbol_page_to_order_page {e}")
             return False
-    
+
     def filling_order_page(self, amount, password, market=False, price=None):
-        """ order the symbol
+        """order the symbol
             if market is True or price is None, order market buy/sell
 
         Args:
@@ -159,44 +156,44 @@ class STOCK:
             bool: suc or not
             str: error text. if succeed, None
         """
-        target_class_name="mtext"
+        target_class_name = "mtext"
         wait = WebDriverWait(self.driver, 10)
         mtexts_eles = wait.until(EC.presence_of_element_located((By.CLASS_NAME, target_class_name)))
         if mtexts_eles:
             # input amount
             mtexts_eles = self.driver.find_elements(By.CLASS_NAME, target_class_name)
             for ele in mtexts_eles:
-                if '売買単位' in ele.text:
-                    order_unit = int(ele.text.split('：')[1])
+                if "売買単位" in ele.text:
+                    order_unit = int(ele.text.split("：")[1])
                     break
             target_name = "input_quantity"
-            input_ele = self.driver.find_element(By.NAME,target_name)
+            input_ele = self.driver.find_element(By.NAME, target_name)
             input_ele.clear()
             input_ele.send_keys(amount * order_unit)
             if market is True or price is None:
                 market_rbutton = "nariyuki"
-                market_rb_ele = self.driver.find_element(By.ID,market_rbutton)
+                market_rb_ele = self.driver.find_element(By.ID, market_rbutton)
                 market_rb_ele.click()
             else:
                 # input price
                 target_name = "input_price"
-                price_ele = self.driver.find_element(By.NAME,target_name)
+                price_ele = self.driver.find_element(By.NAME, target_name)
                 price_ele.clear()
                 price_ele.send_keys(price)
             pwd3_input = "pwd3"
             pwd3_rb_ele = self.driver.find_element(By.ID, pwd3_input)
             pwd3_rb_ele.clear()
             pwd3_rb_ele.send_keys(password)
-            
+
             omit_cbox = "shouryaku"
             omit_cb_ele = self.driver.find_element(By.ID, omit_cbox)
             omit_cb_ele.click()
-            
+
             order_wo_conf = "botton2"
             order_btn_ele = self.driver.find_elements(By.ID, order_wo_conf)
             order_btn_ele[0].click()
-            
-            #check if order is completed
+
+            # check if order is completed
             target_name = "md-l-table-01"
             error_class = "fRed01"
             invalid_ele = self.driver.find_elements(By.CLASS_NAME, error_class)
@@ -210,21 +207,21 @@ class STOCK:
             if result_ele:
                 print("order is completed.")
                 return True, None
-                
-            error_txt = f"failed to order with unkown issue."
+
+            error_txt = "failed to order with unkown issue."
             print(error_txt)
             return False, error_txt
         else:
             error_txt = "can't find unit text"
             print(error_txt)
             return False, error_txt
-            
-    #Need to add try catch to avoid an error when handlers are called on different pages 
+
+    # Need to add try catch to avoid an error when handlers are called on different pages
     def __trade_page_handler(self, index):
-        """ click header of trade page
+        """click header of trade page
 
         Args:
-            index (int): 
+            index (int):
                 0: 新規注文取引所
                 1: 新規注文PTS
                 2: 信用返済・取引現渡
@@ -241,20 +238,25 @@ class STOCK:
                 # open trade page from header
                 header_ele = self.driver.find_element(By.ID, "link02M")
                 header_eles = header_ele.find_element(By.XPATH, "ul").find_elements(By.XPATH, "li")
-                header_eles[1].find_element(By.XPATH,  "a").click()
-            except Exception as e:
+                header_eles[1].find_element(By.XPATH, "a").click()
+            except Exception:
                 print("failed to open trade page.")
                 return False
-            
+
             try:
                 wait = WebDriverWait(self.driver, 10)
                 table_ele = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "md-l-mainarea-01")))
-                td_eles = table_ele.find_element(By.XPATH, "table").find_element(By.XPATH, "tbody").find_element(By.XPATH, "tr").find_elements(By.XPATH, "td")
+                td_eles = (
+                    table_ele.find_element(By.XPATH, "table")
+                    .find_element(By.XPATH, "tbody")
+                    .find_element(By.XPATH, "tr")
+                    .find_elements(By.XPATH, "td")
+                )
                 td_eles[index].click()
-            except Exception as e:
+            except Exception:
                 print(f"failed to open {index} item.")
                 return False
-            
+
             return True
         print("index should be 0 to 8")
         return False
@@ -270,8 +272,8 @@ class STOCK:
         else:
             print("index should be 0 to 13.")
             return False
-    
-    def __handle_symbol_page_header(self, index:int):
+
+    def __handle_symbol_page_header(self, index: int):
         if index <= 8 and index >= 0:
             wait = WebDriverWait(self.driver, 5)
             header_tr = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "tab02T")))
@@ -301,13 +303,13 @@ class STOCK:
         else:
             print("index should be 0 to 8")
             return False
-    
+
     def open_position_page(self):
         return self.__trade_page_handler(3)
-    
+
     def open_ordered_position_page(self):
         return self.__trade_page_handler(4)
-    
+
     def get_positions(self):
         if self.open_position_page():
             positions = []
@@ -316,20 +318,20 @@ class STOCK:
             for index in range(1, len(trs)):
                 position = {}
                 tds = trs[index].find_elements(By.XPATH, "td")
-                names = tds[0].text.split('\n')
+                names = tds[0].text.split("\n")
                 symbol_name = names[0]
                 symbol_index = int(names[1].replace(" ", ""))
-                
+
                 holding_number = tds[1].text
-                prices = tds[2].text.split('\n')
+                prices = tds[2].text.split("\n")
                 bought_price = prices[0]
                 current_price = prices[1]
-                
+
                 tds[5].find_elements(By.XPATH, "a")
                 links = tds[5].find_element(By.XPATH, "div").find_elements(By.XPATH, "a")
                 buy_ele = links[0]
                 sell_ele = links[1]
-                
+
                 position["symbol_name"] = symbol_name
                 position["symbol_index"] = symbol_index
                 position["holding"] = holding_number
@@ -337,13 +339,13 @@ class STOCK:
                 position["current_price"] = current_price
                 position["buy_link"] = buy_ele
                 position["sell_link"] = sell_ele
-                
+
                 positions.append(position)
             return positions
         else:
             return []
-        
-    def get_rating(self, symbol:str) -> dict:
+
+    def get_rating(self, symbol: str) -> dict:
         """
         Args:
             symbol (str): company name or index
@@ -364,16 +366,16 @@ class STOCK:
                     rating = {}
                     for index in range(3, 8):
                         tds = tr_eles[index].find_elements(By.XPATH, "td")
-                        rating[8-index] = int(tds[2].text)
+                        rating[8 - index] = int(tds[2].text)
                     return rating
                 else:
                     return {}
             else:
                 return {}
-            
+
         except Exception as e:
             print(f"error happened on get_rating: {e}")
-        
+
     def get_ratings(self, symbols):
         """
         Args:
@@ -391,9 +393,9 @@ class STOCK:
                     ratings[symbol] = rating
                     print("added rating")
         return ratings
-        
-    def buy_order(self, symbol:str, amount:int, order_price:float=None):
-        """ 
+
+    def buy_order(self, symbol: str, amount: int, order_price: float = None):
+        """
 
         Args:
             symbol (str): symbol to order. Allows if search result shows a page of symbol.
@@ -414,10 +416,10 @@ class STOCK:
         else:
             print("failed to open symbol page")
             return False
-            
-    def buy_less_than_unit(self, symbol, amount:int):
+
+    def buy_less_than_unit(self, symbol, amount: int):
         raise Exception("Not implemented")
-    
+
     def sell_to_close_buy_order(self, symbol, amount, order_price=None):
         """
         Sell to close
@@ -447,7 +449,7 @@ class STOCK:
         else:
             print("No position available")
             return False
-    
+
     def get_orders(self) -> list:
         target_row_class_name = "md-l-tr-01"
         wait = WebDriverWait(self.driver, 5)
@@ -457,27 +459,27 @@ class STOCK:
         for index in range(0, len(trs), 2):
             order = {}
             tds = trs[index].find_elements(By.XPATH, "td")
-            names = tds[3].text.split(' ')
+            names = tds[3].text.split(" ")
             symbol_name = names[0]
             symbol_index = int(names[2])
-            
+
             links = tds[4].find_elements(By.XPATH, "a")
             cancel_ele = links[0]
             modify_ele = links[1]
-            
+
             order["symbol_name"] = symbol_name
             order["symbol_index"] = symbol_index
             order["cancel_link"] = cancel_ele
             order["modify_link"] = modify_ele
             orders.append(order)
-        
+
         return orders
-    
+
     def __click_cancel_on_cancel_page(self, password, do_print=False):
         wait = WebDriverWait(self.driver, 5)
         try:
             pass_ele = wait.until(EC.presence_of_element_located((By.ID, "pwd3")))
-        except Exception as e:
+        except Exception:
             print("password field is not found within timeout")
             return False
         if do_print:
@@ -488,10 +490,10 @@ class STOCK:
         try:
             self.driver.find_element(By.NAME, "ACT_place").click()
             return True
-        except Exception as e:
+        except Exception:
             print("cancel button is not found")
             return False
-    
+
     def cancel_order(self, symbol):
         if self.open_ordered_position_page():
             orders = self.get_orders()
@@ -509,7 +511,7 @@ class STOCK:
             else:
                 print("No orders available.")
         return False
-    
+
     def get_available_budget(self) -> int:
         if self.__check_login():
             if self.__header_bar_handler(0):
@@ -526,6 +528,6 @@ class STOCK:
                 return None
         else:
             return None
-        
+
     def __del__(self):
         self.driver.quit()
