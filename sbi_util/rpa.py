@@ -277,7 +277,12 @@ class STOCK:
         if index <= 8 and index >= 0:
             wait = WebDriverWait(self.driver, 5)
             header_tr = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "tab02T")))
-            tds = header_tr.find_element(By.XPATH, "table").find_element(By.XPATH, "tbody").find_element(By.XPATH, "tr").find_elements(By.XPATH, "td")
+            tds = (
+                header_tr.find_element(By.XPATH, "table")
+                .find_element(By.XPATH, "tbody")
+                .find_element(By.XPATH, "tr")
+                .find_elements(By.XPATH, "td")
+            )
             tds[index].click()
             if index == 0:
                 ele = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "kabuNowStatus")))
@@ -446,9 +451,10 @@ class STOCK:
                     return self.filling_order_page(amount, self.trading_pass, price=order_price)
                 else:
                     print(f"{symbol} is not found on symbol column.")
+                    return False, None
         else:
             print("No position available")
-            return False
+            return False, None
 
     def get_orders(self) -> list:
         target_row_class_name = "md-l-tr-01"
