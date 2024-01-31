@@ -5,7 +5,6 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from webdriver_manager.chrome import ChromeDriverManager
 
 from . import sbi_enum
 
@@ -14,11 +13,7 @@ class STOCK:
     order_types = {}
 
     def __init__(self, id=None, password=None, trading_pass=None) -> None:
-        chrome_option = webdriver.ChromeOptions()
-        chrome_option.add_experimental_option("detach", True)
-        # chrome_option.add_argument('--headless')
-        chrome_option.add_argument("--disable-gpu")
-        self.driver = webdriver.Chrome(ChromeDriverManager().install(), chrome_options=chrome_option)
+        self.driver = webdriver.Chrome()
         self.driver.implicitly_wait(5)
         self.open()
         self.login(id, password)
