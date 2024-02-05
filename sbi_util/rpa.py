@@ -442,11 +442,11 @@ class STOCK:
                     position["sell_link"].click()
                     is_clicked = True
                     break
-                if is_clicked:
-                    return self.filling_order_page(amount, self.trading_pass, price=order_price)
-                else:
-                    print(f"{symbol} is not found on symbol column.")
-                    return False, None
+            if is_clicked:
+                return self.filling_order_page(amount, self.trading_pass, price=order_price)
+            else:
+                print(f"{symbol} is not found on symbol column.")
+                return False, None
         else:
             print("No position available")
             return False, None
