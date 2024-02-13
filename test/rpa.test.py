@@ -45,6 +45,9 @@ class TestStockRPA(unittest.TestCase):
         self.assertTrue(type(rating), dict)
         print(rating)
 
+    def test_close(self):
+        suc, result = self.client.sell_to_close_buy_order("3103", 100)
+
 
 if __name__ == "__main__":
     unittest.main()

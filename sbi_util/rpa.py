@@ -501,7 +501,11 @@ class STOCK:
             if len(orders) > 0:
                 is_clicked = False
                 for order in orders:
-                    if order["symbol_name"] == symbol or order["symbol_index"] == symbol:
+                    if (
+                        (order["symbol_name"] == symbol)
+                        or (str(order["symbol_index"]) == symbol)
+                        or (int(order["symbol_index"]) == symbol)
+                    ):
                         order["cancel_link"].click()
                         is_clicked = True
                         break
