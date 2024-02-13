@@ -438,7 +438,7 @@ class STOCK:
             for position in positions:
                 name = position["symbol_name"]
                 index = position["symbol_index"]
-                if symbol == name or symbol == index:
+                if symbol == name or symbol == str(index) or symbol == int(index):
                     position["sell_link"].click()
                     is_clicked = True
                     break
