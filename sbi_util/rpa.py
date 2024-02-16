@@ -369,8 +369,10 @@ class STOCK:
                         rating[8 - index] = int(tds[2].text)
                     return rating
                 else:
+                    print("couldn't click header on sygnal page.")
                     return {}
             else:
+                print("failed to open symbol page.")
                 return {}
 
         except Exception as e:
