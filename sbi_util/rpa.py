@@ -1,3 +1,4 @@
+import os
 from time import sleep
 
 from selenium import webdriver
@@ -5,15 +6,21 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.chrome.options import Options
+from selenium.common import exceptions
 
 from . import sbi_enum
+from .mail import gmail
 
+BASE_PATH = os.path.dirname(__file__)
 
 class STOCK:
     order_types = {}
 
     def __init__(self, id=None, password=None, trading_pass=None) -> None:
-        self.driver = webdriver.Chrome()
+        options = Options()
+        options.add_argument(f"--user-data-dir={os.path.join(BASE_PATH, "profile")}")
+        self.driver = webdriver.Chrome(options=options)
         self.driver.implicitly_wait(5)
         self.open()
         self.login(id, password)
@@ -66,6 +73,31 @@ class STOCK:
             return False
         except Exception:
             return True
+        
+    def _get_device_code(self):
+        # If anyone want other source, need to overwrite the method
+        return gmail.retrieve_sbi_device_code()
+
+    def handle_otp(self):
+        try:
+            device_input_ele = self.driver.find_element(By.NAME, "device_code")
+            device_register = self.driver.find_element(By.NAME, "ACT_deviceauth")
+            print("start getting device code")
+            device_code = self._get_device_code()
+            if device_code:
+                print("input device code")
+                device_input_ele.send_keys(device_code)
+                device_register.click()
+                return True
+            else:
+                print("device code not found.")
+                return False
+        except exceptions.NoSuchElementException as e:
+            print(e)
+            return self.is_logged_in()
+        except Exception as e:
+            print(e)
+            return False
 
     def login(self, id: str, password: str) -> bool:
         try:
@@ -75,14 +107,24 @@ class STOCK:
             pa_ele.send_keys(password)
             log_ele = self.driver.find_element(By.NAME, "ACT_login")
             log_ele.click()
-            if self.is_logged_in():
-                # store creds to utilize them when login life time end
-                self.id = id
-                self.pa = password
-                return True
+            if self.is_logged_in:
+                    # store creds to utilize them when login life time end
+                    self.id = id
+                    self.pa = password
+                    return True
             else:
-                print("Failed to loing. Please try again.")
-                return False
+                # wait to receive device code
+                sleep(5)
+                if self.handle_otp():
+                    if self.is_logged_in():
+                        self.id = id
+                        self.pa = password
+                        return True
+                    else:
+                        print("Failed to loing. Please try again.")
+                        return False
+                else:
+                    print("Failed to loing. Please try again.")
         except Exception as e:
             print(e)
             return False
@@ -231,11 +273,12 @@ class STOCK:
             self.__check_login()
             try:
                 # open trade page from header
-                header_ele = self.driver.find_element(By.ID, "link02M")
+                header_ele = self.driver.find_element(By.CLASS_NAME, "slc-header-nav-lower-menu")
                 header_eles = header_ele.find_element(By.XPATH, "ul").find_elements(By.XPATH, "li")
-                header_eles[1].find_element(By.XPATH, "a").click()
-            except Exception:
-                print("failed to open trade page.")
+                # 0: お知らせ, 2: ポートフォリト, 3: 取引
+                header_eles[3].find_element(By.XPATH, "a").click()
+            except Exception as e:
+                print(f"failed to open trade page: {e}")
                 return False
 
             try:
@@ -537,4 +580,5 @@ class STOCK:
             return None
 
     def __del__(self):
-        self.driver.quit()
+        if hasattr(self, "driver"):
+            self.driver.quit()

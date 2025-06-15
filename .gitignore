@@ -10,7 +10,10 @@ pyvenv.cfg
 #git
 .git/
 #IgnoreFolders
+venv*/
 .env
 __pycache__/
 debug.py
 *.ipynb
+profile/
+*.json
