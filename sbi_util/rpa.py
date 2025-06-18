@@ -2,17 +2,18 @@ import os
 from time import sleep
 
 from selenium import webdriver
+from selenium.common import exceptions
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.chrome.options import Options
-from selenium.common import exceptions
 
 from . import sbi_enum
 from .mail import gmail
 
 BASE_PATH = os.path.dirname(__file__)
+
 
 class STOCK:
     order_types = {}
@@ -67,27 +68,40 @@ class STOCK:
         except Exception:
             return False
 
+    def __get_device_code_element(self):
+        try:
+            eleemt = self.driver.find_element(By.NAME, "device_code")
+            return eleemt
+        except Exception:
+            return None
+
     def is_logged_in(self) -> bool:
         try:
             self.driver.find_element(By.NAME, "user_password")
             return False
-        except Exception:
+        except exceptions.NoSuchElementException:
+            # If user_password is not found, it means logged in
             return True
-        
+        except Exception as e:
+            print(f"error happened on is_logged_in: {e}")
+            return False
+
     def _get_device_code(self):
         # If anyone want other source, need to overwrite the method
         return gmail.retrieve_sbi_device_code()
 
-    def handle_otp(self):
+    def handle_otp(self, device_element) -> bool:
         try:
-            device_input_ele = self.driver.find_element(By.NAME, "device_code")
-            device_register = self.driver.find_element(By.NAME, "ACT_deviceauth")
-            print("start getting device code")
+            if device_element is None:
+                device_element = self.driver.find_element(By.NAME, "device_code")
+            checkbox = self.driver.find_element(By.NAME, "device_string_checkbox")
+            checkbox.click()
             device_code = self._get_device_code()
             if device_code:
                 print("input device code")
-                device_input_ele.send_keys(device_code)
-                device_register.click()
+                reg_device_element = self.driver.find_element(By.NAME, "ACT_deviceauth")
+                device_element.send_keys(device_code)
+                reg_device_element.click()
                 return True
             else:
                 print("device code not found.")
@@ -107,15 +121,21 @@ class STOCK:
             pa_ele.send_keys(password)
             log_ele = self.driver.find_element(By.NAME, "ACT_login")
             log_ele.click()
-            if self.is_logged_in:
+            device_element = self.__get_device_code_element()
+            if device_element is None:
+                if self.is_logged_in():
                     # store creds to utilize them when login life time end
+                    print("login is completed.")
                     self.id = id
                     self.pa = password
                     return True
+                else:
+                    print("Failed to login. Please check your id and password.")
+                    return False
             else:
                 # wait to receive device code
                 sleep(5)
-                if self.handle_otp():
+                if self.handle_otp(device_element):
                     if self.is_logged_in():
                         self.id = id
                         self.pa = password
@@ -137,8 +157,12 @@ class STOCK:
             field_ele = form_ele.find_element(By.ID, "top_stock_sec")
             field_ele.send_keys(symbol)
             field_ele.send_keys(Keys.ENTER)
-            sleep(1)  # If other symbol page already opened, sometimes wait.until pass before search result comes
-            header_ele = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "head01")))
+            sleep(
+                1
+            )  # If other symbol page already opened, sometimes wait.until pass before search result comes
+            header_ele = wait.until(
+                EC.presence_of_element_located((By.CLASS_NAME, "head01"))
+            )
             del wait
             # header_ele = self.driver.find_element(By.CLASS_NAME, "head01")
 
@@ -158,7 +182,9 @@ class STOCK:
         result = False
         try:
             wait = WebDriverWait(self.driver, 20)
-            header_ele = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "head01")))
+            header_ele = wait.until(
+                EC.presence_of_element_located((By.CLASS_NAME, "head01"))
+            )
             # header_ele = self.driver.find_element(By.CLASS_NAME, "head01")
             if header_ele.text == "国内株式":
                 candidate_eles = self.driver.find_elements(By.CLASS_NAME, order_type)
@@ -195,7 +221,9 @@ class STOCK:
         """
         target_class_name = "mtext"
         wait = WebDriverWait(self.driver, 10)
-        mtexts_eles = wait.until(EC.presence_of_element_located((By.CLASS_NAME, target_class_name)))
+        mtexts_eles = wait.until(
+            EC.presence_of_element_located((By.CLASS_NAME, target_class_name))
+        )
         if mtexts_eles:
             # input amount
             mtexts_eles = self.driver.find_elements(By.CLASS_NAME, target_class_name)
@@ -273,8 +301,12 @@ class STOCK:
             self.__check_login()
             try:
                 # open trade page from header
-                header_ele = self.driver.find_element(By.CLASS_NAME, "slc-header-nav-lower-menu")
-                header_eles = header_ele.find_element(By.XPATH, "ul").find_elements(By.XPATH, "li")
+                header_ele = self.driver.find_element(
+                    By.CLASS_NAME, "slc-header-nav-lower-menu"
+                )
+                header_eles = header_ele.find_element(By.XPATH, "ul").find_elements(
+                    By.XPATH, "li"
+                )
                 # 0: お知らせ, 2: ポートフォリト, 3: 取引
                 header_eles[3].find_element(By.XPATH, "a").click()
             except Exception as e:
@@ -283,7 +315,9 @@ class STOCK:
 
             try:
                 wait = WebDriverWait(self.driver, 10)
-                table_ele = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "md-l-mainarea-01")))
+                table_ele = wait.until(
+                    EC.presence_of_element_located((By.CLASS_NAME, "md-l-mainarea-01"))
+                )
                 td_eles = (
                     table_ele.find_element(By.XPATH, "table")
                     .find_element(By.XPATH, "tbody")
@@ -314,7 +348,9 @@ class STOCK:
     def __handle_symbol_page_header(self, index: int):
         if index <= 8 and index >= 0:
             wait = WebDriverWait(self.driver, 5)
-            header_tr = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "tab02T")))
+            header_tr = wait.until(
+                EC.presence_of_element_located((By.CLASS_NAME, "tab02T"))
+            )
             tds = (
                 header_tr.find_element(By.XPATH, "table")
                 .find_element(By.XPATH, "tbody")
@@ -323,25 +359,43 @@ class STOCK:
             )
             tds[index].click()
             if index == 0:
-                ele = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "kabuNowStatus")))
+                ele = wait.until(
+                    EC.presence_of_element_located((By.CLASS_NAME, "kabuNowStatus"))
+                )
             elif index == 1:
-                ele = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "newsMain01")))
+                ele = wait.until(
+                    EC.presence_of_element_located((By.CLASS_NAME, "newsMain01"))
+                )
             elif index == 2:
-                ele = wait.until(EC.presence_of_element_located((By.ID, "CONTENTSAREA01")))
+                ele = wait.until(
+                    EC.presence_of_element_located((By.ID, "CONTENTSAREA01"))
+                )
             elif index == 3:
-                ele = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "mgt20")))
+                ele = wait.until(
+                    EC.presence_of_element_located((By.CLASS_NAME, "mgt20"))
+                )
                 # case when review is not provided
                 # wait.until(EC.presence_of_element_located((By.CLASS_NAME, "mtext-info-w")))
             elif index == 4:
-                ele = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "shikihouBox01")))
+                ele = wait.until(
+                    EC.presence_of_element_located((By.CLASS_NAME, "shikihouBox01"))
+                )
             elif index == 5:
-                ele = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "summary_left")))
+                ele = wait.until(
+                    EC.presence_of_element_located((By.CLASS_NAME, "summary_left"))
+                )
             elif index == 6:
-                ele = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "stock_chart_disc")))
+                ele = wait.until(
+                    EC.presence_of_element_located((By.CLASS_NAME, "stock_chart_disc"))
+                )
             elif index == 7:
-                ele = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "accTbl01")))
+                ele = wait.until(
+                    EC.presence_of_element_located((By.CLASS_NAME, "accTbl01"))
+                )
             elif index == 8:
-                ele = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "Analysis")))
+                ele = wait.until(
+                    EC.presence_of_element_located((By.CLASS_NAME, "Analysis"))
+                )
             return True
         else:
             print("index should be 0 to 8")
@@ -371,7 +425,9 @@ class STOCK:
                 current_price = prices[1]
 
                 tds[5].find_elements(By.XPATH, "a")
-                links = tds[5].find_element(By.XPATH, "div").find_elements(By.XPATH, "a")
+                links = (
+                    tds[5].find_element(By.XPATH, "div").find_elements(By.XPATH, "a")
+                )
                 buy_ele = links[0]
                 sell_ele = links[1]
 
@@ -404,7 +460,9 @@ class STOCK:
                         if len(tr_eles) == 3:
                             print(f"rating is not provided for {symbol}")
                             return {}
-                        print(f"number of element doesn't match with assumption on {symbol}. HP may be updated")
+                        print(
+                            f"number of element doesn't match with assumption on {symbol}. HP may be updated"
+                        )
                         return {}
                     rating = {}
                     for index in range(3, 8):
@@ -453,7 +511,9 @@ class STOCK:
         self.__check_login()
         if self.__open_symbol_page(symbol):
             if self.__transit_symbol_page_to_order_page(sbi_enum.buy):
-                self.filling_order_page(amount, password=self.trading_pass, price=order_price)
+                self.filling_order_page(
+                    amount, password=self.trading_pass, price=order_price
+                )
                 return True
             else:
                 print("Failed to transit to order page")
@@ -488,7 +548,9 @@ class STOCK:
                     is_clicked = True
                     break
             if is_clicked:
-                return self.filling_order_page(amount, self.trading_pass, price=order_price)
+                return self.filling_order_page(
+                    amount, self.trading_pass, price=order_price
+                )
             else:
                 print(f"{symbol} is not found on symbol column.")
                 return False, None
@@ -499,7 +561,9 @@ class STOCK:
     def get_orders(self) -> list:
         target_row_class_name = "md-l-tr-01"
         wait = WebDriverWait(self.driver, 5)
-        wait.until(EC.presence_of_element_located((By.CLASS_NAME, target_row_class_name)))
+        wait.until(
+            EC.presence_of_element_located((By.CLASS_NAME, target_row_class_name))
+        )
         trs = self.driver.find_elements(By.CLASS_NAME, target_row_class_name)
         orders = []
         for index in range(0, len(trs), 2):
