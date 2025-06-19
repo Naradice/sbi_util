@@ -9,7 +9,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-from . import sbi_enum
+from . import sbi_enum, utils
 from .mail import gmail
 
 BASE_PATH = os.path.dirname(__file__)
@@ -19,11 +19,13 @@ class STOCK:
     order_types = {}
 
     def __init__(self, id=None, password=None, trading_pass=None) -> None:
+        self.logger = utils.setup_logger()
         options = Options()
         options.add_argument(f"--user-data-dir={os.path.join(BASE_PATH, "profile")}")
         self.driver = webdriver.Chrome(options=options)
         self.driver.implicitly_wait(5)
         self.open()
+        self.logger.debug("start initial login process.")
         self.login(id, password)
         self.trading_pass = trading_pass
 
@@ -70,6 +72,7 @@ class STOCK:
 
     def __get_device_code_element(self):
         try:
+            self.logger.debug("getting device element")
             eleemt = self.driver.find_element(By.NAME, "device_code")
             return eleemt
         except Exception:
@@ -92,25 +95,26 @@ class STOCK:
 
     def handle_otp(self, device_element) -> bool:
         try:
+            self.logger.debug("start getting device code from gmail")
             if device_element is None:
                 device_element = self.driver.find_element(By.NAME, "device_code")
             checkbox = self.driver.find_element(By.NAME, "device_string_checkbox")
             checkbox.click()
             device_code = self._get_device_code()
             if device_code:
-                print("input device code")
+                self.logger.debug("input device code")
                 reg_device_element = self.driver.find_element(By.NAME, "ACT_deviceauth")
                 device_element.send_keys(device_code)
                 reg_device_element.click()
                 return True
             else:
-                print("device code not found.")
+                self.logger.warning("device code not found.")
                 return False
         except exceptions.NoSuchElementException as e:
-            print(e)
+            self.logger.error(e)
             return self.is_logged_in()
         except Exception as e:
-            print(e)
+            self.logger.error(e)
             return False
 
     def login(self, id: str, password: str) -> bool:
@@ -123,30 +127,36 @@ class STOCK:
             log_ele.click()
             device_element = self.__get_device_code_element()
             if device_element is None:
+                self.logger.debug(
+                    "no device element. check logged in or encountered an error."
+                )
                 if self.is_logged_in():
                     # store creds to utilize them when login life time end
-                    print("login is completed.")
+                    self.logger.info("login is completed.")
                     self.id = id
                     self.pa = password
                     return True
                 else:
-                    print("Failed to login. Please check your id and password.")
+                    self.logger.warning(
+                        "Failed to login. Please check your id and password."
+                    )
                     return False
             else:
                 # wait to receive device code
-                sleep(5)
+                sleep(3)
                 if self.handle_otp(device_element):
+                    self.logger.debug("device code was available. check login state.")
                     if self.is_logged_in():
                         self.id = id
                         self.pa = password
                         return True
                     else:
-                        print("Failed to loing. Please try again.")
+                        self.logger.warning("Failed to loing. Please try again.")
                         return False
                 else:
-                    print("Failed to loing. Please try again.")
+                    self.logger.warning("Failed to loing. Please try again.")
         except Exception as e:
-            print(e)
+            self.logger.error(e)
             return False
 
     def __open_symbol_page(self, symbol: str) -> bool:
@@ -157,9 +167,8 @@ class STOCK:
             field_ele = form_ele.find_element(By.ID, "top_stock_sec")
             field_ele.send_keys(symbol)
             field_ele.send_keys(Keys.ENTER)
-            sleep(
-                1
-            )  # If other symbol page already opened, sometimes wait.until pass before search result comes
+            sleep(1)
+            # If other symbol page already opened, sometimes wait.until pass before search result comes
             header_ele = wait.until(
                 EC.presence_of_element_located((By.CLASS_NAME, "head01"))
             )
@@ -282,33 +291,25 @@ class STOCK:
             return False, error_txt
 
     # Need to add try catch to avoid an error when handlers are called on different pages
-    def __trade_page_handler(self, index):
+    def __trade_page_handler(self, index: sbi_enum.TRADE_HEADER):
         """click header of trade page
 
         Args:
-            index (int):
-                0: 新規注文取引所
-                1: 新規注文PTS
-                2: 信用返済・取引現渡
-                3: 保有株式
-                4: 注文照会・注文訂正
-                5: IPO・PO
-                6: 立会外
-                7: 単元未満株
-                8: テーマ投資
+            index (TRADE_HEADER): index number of header position
         """
-        if index >= 0 and index <= 8:
+        if index.value >= 0 and index.value <= 9:
             self.__check_login()
             try:
+                self.logger.debug("try to click header of trade page")
                 # open trade page from header
                 header_ele = self.driver.find_element(
                     By.CLASS_NAME, "slc-header-nav-lower-menu"
                 )
-                header_eles = header_ele.find_element(By.XPATH, "ul").find_elements(
-                    By.XPATH, "li"
+                header_eles = header_ele.find_element(By.TAG_NAME, "ul").find_elements(
+                    By.TAG_NAME, "li"
                 )
                 # 0: お知らせ, 2: ポートフォリト, 3: 取引
-                header_eles[3].find_element(By.XPATH, "a").click()
+                header_eles[3].find_element(By.XPATH, ".//div/a").click()
             except Exception as e:
                 print(f"failed to open trade page: {e}")
                 return False
@@ -324,7 +325,7 @@ class STOCK:
                     .find_element(By.XPATH, "tr")
                     .find_elements(By.XPATH, "td")
                 )
-                td_eles[index].click()
+                td_eles[index.value].click()
             except Exception:
                 print(f"failed to open {index} item.")
                 return False
@@ -333,16 +334,25 @@ class STOCK:
         print("index should be 0 to 8")
         return False
 
-    def __header_bar_handler(self, index):
+    def __header_bar_handler(self, option: sbi_enum.COMMON_HEADER):
+        index = option.value
+
         if index >= 0 and index <= 13:
+            self.logger.debug(f"open {index} of header bar")
             # header may exist on any page, so click it without page transition.
-            target_id_name = "navi01P"
-            header_ele = self.driver.find_element(By.ID, target_id_name)
-            lis = header_ele.find_element(By.XPATH, "ul").find_elements(By.XPATH, "li")
-            lis[index].click()
-            return True
+            target_class_name = "slc-global-nav-container"
+            try:
+                header_ele = self.driver.find_element(By.CLASS_NAME, target_class_name)
+                lis = header_ele.find_element(By.TAG_NAME, "ul").find_elements(
+                    By.TAG_NAME, "li"
+                )
+                lis[index].click()
+                return True
+            except Exception as e:
+                self.logger.error(e)
+                return False
         else:
-            print("index should be 0 to 13.")
+            self.logger.error("index should be 0 to 13.")
             return False
 
     def __handle_symbol_page_header(self, index: int):
@@ -402,10 +412,10 @@ class STOCK:
             return False
 
     def open_position_page(self):
-        return self.__trade_page_handler(3)
+        return self.__trade_page_handler(sbi_enum.TRADE_HEADER.OWNED_STOCKS)
 
     def open_ordered_position_page(self):
-        return self.__trade_page_handler(4)
+        return self.__trade_page_handler(sbi_enum.TRADE_HEADER.ORDER_INQUIRY)
 
     def get_positions(self):
         if self.open_position_page():
@@ -453,6 +463,7 @@ class STOCK:
             dict: key: number of star, value: number of traders who advocate the key
         """
         try:
+            self.logger.debug("start getting rate")
             if self.__open_symbol_page(symbol):
                 if self.__handle_symbol_page_header(3):
                     tr_eles = self.driver.find_elements(By.CLASS_NAME, "vaT")
@@ -627,18 +638,23 @@ class STOCK:
         return False
 
     def get_available_budget(self) -> int:
+        self.logger.debug("start getting available buget")
         if self.__check_login():
-            if self.__header_bar_handler(0):
-                div = self.driver.find_element(By.CLASS_NAME, "tp-box-06")
-                td = div.find_element(By.CLASS_NAME, "tp-td-01")
-                unit_txt = "円"
-                budget_txt = td.text.replace(",", "").split(unit_txt)[0]
+            self.logger.debug("logged in state")
+            if self.__header_bar_handler(sbi_enum.COMMON_HEADER.HOME):
+                div = self.driver.find_element(By.CLASS_NAME, "seeds-list-form-lg")
+                buget_text_element = div.find_element(
+                    By.XPATH, ".//div/div/div/div[2]/div[2]/span/p/span[1]"
+                )
+                self.logger.debug(f"retrieved {buget_text_element.text}. Try parse it.")
+                budget_txt = buget_text_element.text.replace(",", "")
                 try:
                     return int(budget_txt)
                 except Exception as e:
-                    print(f"unable to convert budget text to int: {e}")
+                    print(f"unable to convert budget {budget_txt} to int: {e}")
                     return None
             else:
+                self.logger.error("failed to open header bar[0]")
                 return None
         else:
             return None
