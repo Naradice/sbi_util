@@ -162,29 +162,33 @@ class STOCK:
     def __open_symbol_page(self, symbol: str) -> bool:
         try:
             wait = WebDriverWait(self.driver, 5)
-            form_ele = wait.until(EC.presence_of_element_located((By.ID, "srchK")))
-            # form_ele = self.driver.find_element(By.ID, "srchK")
-            field_ele = form_ele.find_element(By.ID, "top_stock_sec")
-            field_ele.send_keys(symbol)
-            field_ele.send_keys(Keys.ENTER)
-            sleep(1)
+            form_ele = wait.until(
+                EC.presence_of_element_located((By.ID, "brand-search-text"))
+            )
+            self.logger.debug("found an element to search symbol")
+            form_ele.send_keys(symbol)
+            form_ele.send_keys(Keys.ENTER)
             # If other symbol page already opened, sometimes wait.until pass before search result comes
+            sleep(1)
             header_ele = wait.until(
                 EC.presence_of_element_located((By.CLASS_NAME, "head01"))
             )
             del wait
-            # header_ele = self.driver.find_element(By.CLASS_NAME, "head01")
-
+            # If there are some candidates or no candidate for a symbol text, search result page is shown
             if "検索結果" in header_ele.text:
-                print(f"{symbol} returned candidates page on open_order_page")
+                log_text = f"{symbol} returned candidates page on open_order_page"
+                print(log_text)
+                self.logger.warning(log_text)
                 return False
+            # If one candidate
             elif "国内株式" in header_ele.text:
+                self.logger.debug("found a symbol")
                 return True
             else:
-                print("failed to load the symvol page")
+                self.logger.warning("failed to load the symbol page")
                 return False
         except Exception as e:
-            print(f"error happened on open_symbol_page {e}")
+            self.logger.error(f"error happened on open_symbol_page {e}")
             return False
 
     def __transit_symbol_page_to_order_page(self, order_type) -> bool:
@@ -361,12 +365,9 @@ class STOCK:
             header_tr = wait.until(
                 EC.presence_of_element_located((By.CLASS_NAME, "tab02T"))
             )
-            tds = (
-                header_tr.find_element(By.XPATH, "table")
-                .find_element(By.XPATH, "tbody")
-                .find_element(By.XPATH, "tr")
-                .find_elements(By.XPATH, "td")
-            )
+            self.logger.debug("found header for symbol information")
+            first_tr = header_tr.find_element(By.XPATH, ".//table/tbody/tr")
+            tds = first_tr.find_elements(By.TAG_NAME, "td")
             tds[index].click()
             if index == 0:
                 ele = wait.until(
@@ -488,7 +489,7 @@ class STOCK:
                 return {}
 
         except Exception as e:
-            print(f"error happened on get_rating: {e}")
+            self.logger.error(f"error happened on get_rating: {e}")
 
     def get_ratings(self, symbols):
         """

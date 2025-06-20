@@ -1,10 +1,13 @@
-import json
 import os
 import sys
 import unittest
+from functools import wraps
 
 import dotenv
 
+import setup
+
+setup.set_debug_console_logging("sbirpa")
 base_dir = os.path.dirname(__file__)
 env_file = os.path.join(base_dir, ".env")
 dotenv.load_dotenv(env_file)
@@ -25,29 +28,51 @@ except ImportError:
 import sbi_util.rpa as rpa
 
 
-class TestStockRPA(unittest.TestCase):
-    client = rpa.STOCK(os.environ["sbi_id"], os.environ["sbi_password"], os.environ["sbi_trade_password"])
+def with_asserts(func):
+    @wraps(func)
+    def wrapper():
+        tc = unittest.TestCase()
+        func(tc)
 
-    def __init__(self, methodName: str = ...) -> None:
-        super().__init__(methodName)
+    return wrapper
 
-    def test_get_buget(self):
-        buget = self.client.get_available_budget()
-        self.assertGreaterEqual(buget, 0)
 
-    def test_get_a_rating(self):
-        rating = self.client.get_rating("8031")
-        self.assertTrue(type(rating), dict)
-        print(rating)
+client = rpa.STOCK(
+    os.environ["sbi_id"],
+    os.environ["sbi_password"],
+    os.environ["sbi_trade_password"],
+)
 
-    def test_get_ratings(self):
-        rating = self.client.get_ratings(["1928", "8031", "5108"])
-        self.assertTrue(type(rating), dict)
-        print(rating)
 
-    def test_close(self):
-        suc, result = self.client.sell_to_close_buy_order("3103", 100)
+@with_asserts
+def test_get_buget(tc: unittest.TestCase):
+    buget = client.get_available_budget()
+    tc.assertGreaterEqual(buget, 0)
+
+
+@with_asserts
+def test_get_a_rating(tc: unittest.TestCase):
+    rating = client.get_rating("8031")
+    tc.assertIsInstance(rating, dict)
+    print(rating)
+
+
+@with_asserts
+def test_get_ratings(tc: unittest.TestCase):
+    rating = client.get_ratings(["1928", "8031", "5108"])
+    tc.assertIsInstance(rating, dict)
+    print(rating)
+
+
+@with_asserts
+def test_close(tc: unittest.TestCase):
+    suc, result = client.sell_to_close_buy_order("3103", 100)
 
 
 if __name__ == "__main__":
-    unittest.main()
+    suite = unittest.TestSuite()
+    suite.addTest(unittest.FunctionTestCase(test_get_buget))
+    suite.addTest(unittest.FunctionTestCase(test_get_a_rating))
+    suite.addTest(unittest.FunctionTestCase(test_get_ratings))
+    suite.addTest(unittest.FunctionTestCase(test_close))
+    unittest.TextTestRunner().run(suite)
