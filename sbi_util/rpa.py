@@ -4,6 +4,7 @@ from time import sleep
 from selenium import webdriver
 from selenium.common import exceptions
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
@@ -239,6 +240,7 @@ class STOCK:
         )
         if mtexts_eles:
             # input amount
+            self.logger.debug("start filling to sell")
             mtexts_eles = self.driver.find_elements(By.CLASS_NAME, target_class_name)
             for ele in mtexts_eles:
                 if "売買単位" in ele.text:
@@ -248,28 +250,34 @@ class STOCK:
             input_ele = self.driver.find_element(By.NAME, target_name)
             input_ele.clear()
             input_ele.send_keys(amount * order_unit)
+            self.logger.debug("filled order amount")
             if market is True or price is None:
                 market_rbutton = "nariyuki"
                 market_rb_ele = self.driver.find_element(By.ID, market_rbutton)
                 market_rb_ele.click()
+                self.logger.debug("nariyuki order")
             else:
                 # input price
                 target_name = "input_price"
                 price_ele = self.driver.find_element(By.NAME, target_name)
                 price_ele.clear()
                 price_ele.send_keys(price)
+                self.logger.debug("filled order price")
             pwd3_input = "pwd3"
             pwd3_rb_ele = self.driver.find_element(By.ID, pwd3_input)
             pwd3_rb_ele.clear()
             pwd3_rb_ele.send_keys(password)
+            self.logger.debug("filled order password")
 
             omit_cbox = "shouryaku"
             omit_cb_ele = self.driver.find_element(By.ID, omit_cbox)
             omit_cb_ele.click()
+            self.logger.debug("enabled omit option")
 
             order_wo_conf = "botton2"
             order_btn_ele = self.driver.find_elements(By.ID, order_wo_conf)
             order_btn_ele[0].click()
+            self.logger.debug("clicked to order")
 
             # check if order is completed
             target_name = "md-l-table-01"
@@ -283,15 +291,15 @@ class STOCK:
                     return False, error_txt
             result_ele = self.driver.find_elements(By.CLASS_NAME, target_name)
             if result_ele:
-                print("order is completed.")
+                self.logger.info("order is completed.")
                 return True, None
 
             error_txt = "failed to order with unkown issue."
-            print(error_txt)
+            self.logger.error(error_txt)
             return False, error_txt
         else:
             error_txt = "can't find unit text"
-            print(error_txt)
+            self.logger.error(f"failed to order: {error_txt}")
             return False, error_txt
 
     # Need to add try catch to avoid an error when handlers are called on different pages
@@ -315,7 +323,7 @@ class STOCK:
                 # 0: お知らせ, 2: ポートフォリト, 3: 取引
                 header_eles[3].find_element(By.XPATH, ".//div/a").click()
             except Exception as e:
-                print(f"failed to open trade page: {e}")
+                self.logger.error(f"failed to open trade page: {e}")
                 return False
 
             try:
@@ -323,19 +331,19 @@ class STOCK:
                 table_ele = wait.until(
                     EC.presence_of_element_located((By.CLASS_NAME, "md-l-mainarea-01"))
                 )
-                td_eles = (
-                    table_ele.find_element(By.XPATH, "table")
-                    .find_element(By.XPATH, "tbody")
-                    .find_element(By.XPATH, "tr")
-                    .find_elements(By.XPATH, "td")
-                )
-                td_eles[index.value].click()
-            except Exception:
-                print(f"failed to open {index} item.")
+                tr_ele = table_ele.find_element(By.XPATH, ".//table/tbody/tr")
+                td_eles = tr_ele.find_elements(By.XPATH, "td")
+                href = td_eles[index.value].find_element(By.XPATH, "a")
+                # sometimes header dropdown keep shown. close it by click top left
+                ActionChains(self.driver).move_by_offset(0, 0).click().perform()
+                sleep(0.3)
+                href.click()
+            except Exception as e:
+                self.logger.error(f"failed to open {index} item: {e}")
                 return False
 
             return True
-        print("index should be 0 to 8")
+        self.logger.error(f"index should be 0 to 9: {index}")
         return False
 
     def __header_bar_handler(self, option: sbi_enum.COMMON_HEADER):
@@ -421,26 +429,66 @@ class STOCK:
     def get_positions(self):
         if self.open_position_page():
             positions = []
-            target_row_class_name = "md-l-tr-04"
-            trs = self.driver.find_elements(By.CLASS_NAME, target_row_class_name)
-            for index in range(1, len(trs)):
+            li_eles = self.driver.find_elements(By.CLASS_NAME, "seeds-table-row")
+            self.logger.debug(f"found {len(li_eles)} symbols.")
+            for li in li_eles:
                 position = {}
-                tds = trs[index].find_elements(By.XPATH, "td")
-                names = tds[0].text.split("\n")
-                symbol_name = names[0]
-                symbol_index = int(names[1].replace(" ", ""))
+                tds = li.find_elements(By.XPATH, "div")
+                # get symbol name
+                name_ele = tds[0].find_element(By.XPATH, ".//div/a")
+                symbol_name = name_ele.text
+                self.logger.debug(f"got symbol name: {symbol_name}")
+                symbol_name = symbol_name.replace(" ", "")
+                # get index number of the symbol
+                index_ele = tds[0].find_element(By.XPATH, ".//div/div/div")
+                symbol_index = index_ele.text
+                try:
+                    symbol_index = int(symbol_index)
+                except Exception as e:
+                    self.logger.error(f"failed to cast symbol index: {e}")
 
-                holding_number = tds[1].text
-                prices = tds[2].text.split("\n")
-                bought_price = prices[0]
-                current_price = prices[1]
-
-                tds[5].find_elements(By.XPATH, "a")
-                links = (
-                    tds[5].find_element(By.XPATH, "div").find_elements(By.XPATH, "a")
+                # get holding number
+                holding_number_ele = tds[1].find_element(
+                    By.XPATH, ".//div/div[1]/div[1]"
                 )
+                total_holding_number = holding_number_ele.text
+                ordering_number_ele = tds[1].find_element(
+                    By.XPATH, ".//div/div[2]/div[1]"
+                )
+                ordering_number = ordering_number_ele.text
+                self.logger.debug(
+                    f"got holding info: {total_holding_number}, {ordering_number}"
+                )
+                ordering_number = ordering_number.replace("(", "")
+                holding_number = None
+                try:
+                    holding_number = int(total_holding_number)
+                    ordering_number = int(ordering_number)
+                    holding_number -= ordering_number
+                except Exception as e:
+                    self.logger.error(f"failed to cast holding numbers: {e}")
+
+                # get prices
+                price_ele = tds[2].find_element(By.XPATH, ".//div/div[1]/div[1]")
+                bought_price = price_ele.text
+                current_price_ele = tds[2].find_element(
+                    By.XPATH, ".//div/div[2]/div[1]"
+                )
+                current_price = current_price_ele.text
+                self.logger.debug(f"got prices: {bought_price}")
+                try:
+                    bought_price = bought_price.replace(",", "")
+                    bought_price = float(bought_price)
+                    current_price = current_price.replace(",", "")
+                    current_price = float(current_price)
+                except Exception as e:
+                    self.logger.error(f"failed to convert prices: {e}")
+
+                links_container = tds[5].find_element(By.XPATH, ".//div/div")
+                links = links_container.find_elements(By.XPATH, "a")
                 buy_ele = links[0]
                 sell_ele = links[1]
+                self.logger.debug("got links")
 
                 position["symbol_name"] = symbol_name
                 position["symbol_index"] = symbol_index
@@ -502,11 +550,13 @@ class STOCK:
         ratings = {}
         if len(symbols) > 0:
             for symbol in symbols:
-                print("start getting rateing")
+                self.logger.info("start getting rating")
                 rating = self.get_rating(symbol)
                 if type(rating) is dict:
                     ratings[symbol] = rating
-                    print("added rating")
+                    self.logger.debug("added rating")
+                else:
+                    self.logger.debug(f"rating is not available for {symbol}")
         return ratings
 
     def buy_order(self, symbol: str, amount: int, order_price: float = None):
@@ -557,6 +607,7 @@ class STOCK:
                 index = position["symbol_index"]
                 if symbol == name or symbol == str(index) or symbol == int(index):
                     position["sell_link"].click()
+                    self.logger.debug("found symbol in position page.")
                     is_clicked = True
                     break
             if is_clicked:
@@ -564,10 +615,10 @@ class STOCK:
                     amount, self.trading_pass, price=order_price
                 )
             else:
-                print(f"{symbol} is not found on symbol column.")
+                self.logger.warning(f"{symbol} is not found on symbol column.")
                 return False, None
         else:
-            print("No position available")
+            self.logger.info("No position available")
             return False, None
 
     def get_orders(self) -> list:
