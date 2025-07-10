@@ -696,7 +696,7 @@ class STOCK:
             if self.__header_bar_handler(sbi_enum.COMMON_HEADER.HOME):
                 div = self.driver.find_element(By.CLASS_NAME, "seeds-list-form-lg")
                 buget_text_element = div.find_element(
-                    By.XPATH, ".//div/div/div/div[2]/div[2]/span/p/span[1]"
+                    By.XPATH, ".//div/div[1]/div[3]/span/div/div[1]"
                 )
                 self.logger.debug(f"retrieved {buget_text_element.text}. Try parse it.")
                 budget_txt = buget_text_element.text.replace(",", "")

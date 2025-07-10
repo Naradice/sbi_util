@@ -66,7 +66,7 @@ def test_get_ratings(tc: unittest.TestCase):
 
 @with_asserts
 def test_close(tc: unittest.TestCase):
-    suc, result = client.sell_to_close_buy_order("3103", 100)
+    suc, result = client.sell_to_close_buy_order("3103", 1)
 
 
 if __name__ == "__main__":
